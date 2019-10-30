@@ -8,17 +8,17 @@ import * as escapeHtml from 'escape-html'
  * 
  */
 class Key {
-    static fromUri(uri: vscode.Uri): string {
-        return uri.toString();
-    }
+  static fromUri(uri: vscode.Uri): string {
+    return uri.toString();
+  }
 
-    static fromDoc(document: vscode.TextDocument): string {
-        return this.fromUri(document.uri);
-    }
+  static fromDoc(document: vscode.TextDocument): string {
+    return this.fromUri(document.uri);
+  }
 
-    static fromEditor(editor: vscode.TextEditor): string {
-        return this.fromDoc(editor.document);
-    }
+  static fromEditor(editor: vscode.TextEditor): string {
+    return this.fromDoc(editor.document);
+  }
 }
 
 /** 
@@ -27,32 +27,32 @@ class Key {
  * 
  */
 class DocumentWatcher {
-    private readonly _subscriptions: Array<vscode.Disposable>;
+  private readonly _subscriptions: Array<vscode.Disposable>;
 
-    private readonly _uri: vscode.Uri;
-    private readonly _onDidChange: vscode.EventEmitter<vscode.TextDocument>;
+  private readonly _uri: vscode.Uri;
+  private readonly _onDidChange: vscode.EventEmitter<vscode.TextDocument>;
 
-    constructor(uri: vscode.Uri) {
-        this._subscriptions = new Array<vscode.Disposable>();
+  constructor(uri: vscode.Uri) {
+    this._subscriptions = new Array<vscode.Disposable>();
 
-        this._uri = uri;
-        this._onDidChange = new vscode.EventEmitter<vscode.TextDocument>();
+    this._uri = uri;
+    this._onDidChange = new vscode.EventEmitter<vscode.TextDocument>();
 
-        vscode.workspace.onDidChangeTextDocument(e => {
-            if (Key.fromDoc(e.document) == Key.fromUri(this._uri)) {
-                this._onDidChange.fire(e.document);
-            }
-        }, this, this._subscriptions)
-    }
+    vscode.workspace.onDidChangeTextDocument(e => {
+      if (Key.fromDoc(e.document) == Key.fromUri(this._uri)) {
+          this._onDidChange.fire(e.document);
+      }
+    }, this, this._subscriptions)
+  }
 
-    get onDidChange(): vscode.Event<vscode.TextDocument> {
-        return this._onDidChange.event;
-    }
+  get onDidChange(): vscode.Event<vscode.TextDocument> {
+    return this._onDidChange.event;
+  }
 
-    public dispose(): void {
-        this._subscriptions.forEach(subscription => subscription.dispose());
-        this._onDidChange.dispose();
-    }
+  public dispose(): void {
+    this._subscriptions.forEach(subscription => subscription.dispose());
+    this._onDidChange.dispose();
+  }
 }
 
 /**  
@@ -61,114 +61,115 @@ class DocumentWatcher {
  * 
 */
 class DocumentConnection {
-    private readonly _subscriptions: Array<vscode.Disposable>;
+  private readonly _subscriptions: Array<vscode.Disposable>;
 
-    private readonly _destination: vscode.Uri;
-    private readonly _source: vscode.Uri;
-    private readonly _watcher: DocumentWatcher;
-    
-    private readonly _onDidChange: vscode.EventEmitter<vscode.Uri>
+  private readonly _destination: vscode.Uri;
+  private readonly _source: vscode.Uri;
+  private readonly _watcher: DocumentWatcher;
+  
+  private readonly _onDidChange: vscode.EventEmitter<vscode.Uri>
 
-    private _decorator: HtmlEscapeTextDecorator;
-    private _opened: boolean;
+  private _decorator: HtmlEscapeTextDecorator;
+  private _opened: boolean;
 
-    constructor(destination: vscode.Uri, source: vscode.Uri) {
-        this._subscriptions = new Array<vscode.Disposable>();
+  constructor(destination: vscode.Uri, source: vscode.Uri) {
+    this._subscriptions = new Array<vscode.Disposable>();
 
-        this._destination = destination;
-        this._source = source;
+    this._destination = destination;
+    this._source = source;
 
-        this._watcher = new DocumentWatcher(source);
-        this._onDidChange = new vscode.EventEmitter<vscode.Uri>();
+    this._watcher = new DocumentWatcher(source);
+    this._onDidChange = new vscode.EventEmitter<vscode.Uri>();
 
-        this._watcher.onDidChange(() => {
+    this._watcher.onDidChange(() => {
 
-            this._pulse();
+      this._pulse();
 
-        }, this, this._subscriptions);
+    }, this, this._subscriptions);
+  }
+
+  get destination(): vscode.Uri {
+    return this._destination;
+  }
+
+  get source(): vscode.Uri {
+    return this._source;
+  }
+
+  get onDidChange(): vscode.Event<vscode.Uri> {
+    return this._onDidChange.event;
+  }
+
+  public decorate(decorator: HtmlEscapeTextDecorator): void {
+    this._decorator = decorator;
+    if (this._opened) {
+      this._pulse();
     }
+  }
 
-    get destination(): vscode.Uri {
-        return this._destination;
+  public read(): string {
+    let key = Key.fromUri(this._source);
+    let document = vscode.workspace.textDocuments.find(doc => Key.fromDoc(doc) == key);
+    if (document) {
+      return this._decorator.read(document);
     }
+    return null;
+  }
 
-    get source(): vscode.Uri {
-        return this._source;
-    }
+  public open(): void {
+    this._opened = true;
+    this._pulse();
+  }
 
-    get onDidChange(): vscode.Event<vscode.Uri> {
-        return this._onDidChange.event;
-    }
+  public dispose(): void {
+    this._subscriptions.forEach(subscription => subscription.dispose());
+    this._watcher.dispose();
+  }
 
-    public decorate(decorator: HtmlEscapeTextDecorator): void {
-        this._decorator = decorator;
-        if (this._opened) {
-            this._pulse();
-        }
-    }
-
-    public read(): string {
-        let document = vscode.workspace.textDocuments.find(doc => Key.fromDoc(doc) == Key.fromUri(this._source));
-        if (document) {
-            return this._decorator.read(document);
-        }
-        return null;
-    }
-
-    public open(): void {
-        this._opened = true;
-        this._pulse();
-    }
-
-    public dispose(): void {
-        this._subscriptions.forEach(subscription => subscription.dispose());
-        this._watcher.dispose();
-    }
-
-    private _pulse(): void {
-        this._onDidChange.fire(this._destination);
-    }
+  private _pulse(): void {
+    this._onDidChange.fire(this._destination);
+  }
 }
 
 /**
  * vscode.TextDocument text decorator. When selects the content (portions) of the document and escapes them.
  */
 class HtmlEscapeTextDecorator {
-    private _portions: Array<vscode.Selection>;
+  private _portions: Array<vscode.Selection>;
 
-    constructor(portions?: Array<vscode.Selection>) {
-        this._portions = portions;
+  constructor(portions?: Array<vscode.Selection>) {
+    this._portions = portions;
+  }
+  
+  public read(document: vscode.TextDocument): string {
+    let portions = this._portions;
+    if (portions == null || (portions.length == 1 && portions[0].isEmpty)) {
+      portions = [
+        new vscode.Selection(new vscode.Position(0, 0), document.lineAt(document.lineCount - 1).range.end)
+      ];
     }
-    
-    public read(document: vscode.TextDocument): string {
-        let portions = this._portions;
-        if (portions == null || (portions.length == 1 && portions[0].isEmpty)) {
-            portions = [
-                new vscode.Selection(new vscode.Position(0, 0), document.lineAt(document.lineCount - 1).range.end)
-            ];
+
+    let outputText = new Array<string>();
+
+    portions.forEach((portion, index) => {
+      if (index > 0) {
+        let cap = (portions[index].start.line - portions[index - 1].end.line) - 1;
+        for (let i = 0; i < cap; ++i) {
+          outputText.push('');
         }
+      }
 
-        let outputText = new Array<string>();
+      let v = escapeHtml(document.getText(portion));
 
-        portions.forEach((portion, index) => {
-            if (index > 0) {
-                let cap = (portions[index].start.line - portions[index - 1].end.line) - 1;
-                for (let i = 0; i < cap; ++i) {
-                    outputText.push('');
-                }
-            }
+      outputText.push(v);
+    });
 
-            let v = escapeHtml(document.getText(portion));
-
-            outputText.push(v);
-        });
-
-        switch (document.eol) {
-            case vscode.EndOfLine.CRLF: return outputText.join('\r\n');
-            case vscode.EndOfLine.LF: return outputText.join('\n');
-            default: return outputText.join('');
-        }
+    switch (document.eol) {
+      case vscode.EndOfLine.CRLF: return outputText.join('\r\n');
+      case vscode.EndOfLine.LF: return outputText.join('\n');
+      default: return outputText.join('');
     }
+  }
 }
 
 /**
@@ -177,65 +178,66 @@ class HtmlEscapeTextDecorator {
  * 
  */
 export class HtmlEscapeTextDocumentContentProvider implements vscode.TextDocumentContentProvider {
-    static readonly scheme: string = 'html-escape';
-    static readonly previewDocument: string = 'preview-document';
+  static readonly scheme: string = 'html-escape';
+  static readonly previewDocument: string = 'preview-document';
 
-    private _disposables: Array<vscode.Disposable>;
+  private _disposables: Array<vscode.Disposable>;
 
-    private _connections: Map<string, DocumentConnection>;
+  private _connections: Map<string, DocumentConnection>;
 
-    private _onDidChangeEvent: vscode.EventEmitter<vscode.Uri>;
+  private _onDidChangeEvent: vscode.EventEmitter<vscode.Uri>;
 
-    constructor() {
-        this._disposables = new Array<vscode.Disposable>();
+  constructor() {
+    this._disposables = new Array<vscode.Disposable>();
 
-        this._connections = new Map<string, DocumentConnection>();
+    this._connections = new Map<string, DocumentConnection>();
 
-        this._onDidChangeEvent = new vscode.EventEmitter<vscode.Uri>();
+    this._onDidChangeEvent = new vscode.EventEmitter<vscode.Uri>();
 
-        this._disposables.push(this._onDidChangeEvent);
+    this._disposables.push(this._onDidChangeEvent);
+  }
+
+  dispose() : void {
+    this._disposables.forEach(item => item.dispose());
+  }
+
+  get onDidChange(): vscode.Event<vscode.Uri> {
+    return this._onDidChangeEvent.event;
+  }
+
+  public provideTextDocumentContent(uri: vscode.Uri): string {
+    let connection = this._connections.get(Key.fromUri(uri));
+    if (connection) {
+      return connection.read();
     }
+    return '';
+  }
 
-    dispose() : void {
-        this._disposables.forEach(item => item.dispose());
-    }
-
-    get onDidChange(): vscode.Event<vscode.Uri> {
-        return this._onDidChangeEvent.event;
-    }
-
-    public provideTextDocumentContent(uri: vscode.Uri): string {
-        let connection = this._connections.get(Key.fromUri(uri));
-        if (connection) {
-            return connection.read();
-        }
-        return '';
-    }
-
-    public show(previewUri: vscode.Uri, uri: vscode.Uri, portions?: Array<vscode.Selection>) {
-        let connection = this._connections.get(Key.fromUri(previewUri));
-        if (connection) {
-            if (Key.fromUri(connection.source) == Key.fromUri(uri)) {
-                connection.decorate(new HtmlEscapeTextDecorator(portions));
-                return;
-            }
-            connection.dispose();
-        }
-
-        connection = new DocumentConnection(previewUri, uri);
-
-        this._connections.set(Key.fromUri(previewUri), connection);
-        
-        connection.onDidChange(uri => {
-            
-            this._onDidChangeEvent.fire(uri);
-            
-        }, this);
+  public show(previewUri: vscode.Uri, uri: vscode.Uri, portions?: Array<vscode.Selection>) {
+    let connection = this._connections.get(Key.fromUri(previewUri));
+    if (connection) {
+      if (Key.fromUri(connection.source) == Key.fromUri(uri)) {
         connection.decorate(new HtmlEscapeTextDecorator(portions));
-        connection.open();        
+        return;
+      }
+      connection.dispose();
     }
+
+    connection = new DocumentConnection(previewUri, uri);
+
+    this._connections.set(Key.fromUri(previewUri), connection);
+    
+    connection.onDidChange(uri => {
+        
+      this._onDidChangeEvent.fire(uri);
+        
+    }, this, this._disposables);
+    
+    connection.decorate(new HtmlEscapeTextDecorator(portions));
+    connection.open();        
+  }
 }
 
 export function createPreviewUri(name: string, id: string): vscode.Uri {
-    return vscode.Uri.parse(`${HtmlEscapeTextDocumentContentProvider.scheme}://${HtmlEscapeTextDocumentContentProvider.previewDocument}/${name}?id=${id}`)
+  return vscode.Uri.parse(`${HtmlEscapeTextDocumentContentProvider.scheme}://${HtmlEscapeTextDocumentContentProvider.previewDocument}/${name}?id=${id}`)
 }
